@@ -1,1 +1,207 @@
 
+<!DOCTYPE html>
+<html lang="hr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>QR skener poklona 2026</title>
+
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f3f4f6;
+      margin: 0;
+      padding: 16px;
+      text-align: center;
+    }
+
+    .kartica {
+      max-width: 480px;
+      margin: 20px auto;
+      padding: 20px;
+      background: white;
+      border-radius: 14px;
+      box-shadow: 0 3px 12px #0002;
+    }
+
+    h2 { margin-top: 0; }
+
+    #reader {
+      width: 100%;
+      margin: 20px auto;
+    }
+
+    button {
+      background: #e38525;
+      color: white;
+      border: none;
+      padding: 15px;
+      border-radius: 8px;
+      font-size: 18px;
+      width: 100%;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+    }
+
+    #poruka {
+      margin-top: 15px;
+      font-size: 17px;
+      overflow-wrap: anywhere;
+    }
+
+    #rezultat {
+      margin-top: 15px;
+      padding: 15px;
+      background: #f0fdf4;
+      border-radius: 8px;
+      display: none;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="kartica">
+    <h2>Preuzimanje poklona 2026</h2>
+    <p>Usmjerite kameru prema QR kodu roditelja.</p>
+
+    <div id="reader"></div>
+
+    <button id="pokreni" onclick="pokreniSkener()">
+      Pokreni kameru
+    </button>
+
+    <p id="poruka"></p>
+
+    <div id="rezultat">
+      <h3>QR kod uspješno očitan</h3>
+      <p id="ocitaniKod"></p>
+      <button onclick="ponovnoSkeniraj()">
+        Skeniraj sljedeći QR kod
+      </button>
+    </div>
+  </div>
+
+  <script>
+    let skener = null;
+    let obradjuje = false;
+
+    function izdvojiKod(tekst) {
+      tekst = String(tekst || "").trim();
+
+      try {
+        const url = new URL(tekst);
+        const kod = url.searchParams.get("kod");
+
+        if (kod && /^[A-ZČĆĐŠŽ]\d{5}$/i.test(kod.trim())) {
+          return kod.trim().toUpperCase();
+        }
+      } catch (e) {}
+
+      if (/^[A-ZČĆĐŠŽ]\d{5}$/i.test(tekst)) {
+        return tekst.toUpperCase();
+      }
+
+      return "";
+    }
+
+    async function pokreniSkener() {
+      const poruka = document.getElementById("poruka");
+      const gumb = document.getElementById("pokreni");
+
+      if (skener) return;
+
+      gumb.disabled = true;
+      poruka.textContent = "Pokretanje kamere...";
+      obradjuje = false;
+
+      try {
+        if (!navigator.mediaDevices ||
+            !navigator.mediaDevices.getUserMedia) {
+          throw new Error(
+            "Preglednik ne podržava pristup kameri."
+          );
+        }
+
+        if (typeof Html5Qrcode === "undefined") {
+          throw new Error(
+            "Biblioteka za skeniranje nije učitana."
+          );
+        }
+
+        skener = new Html5Qrcode("reader");
+
+        await skener.start(
+          { facingMode: "environment" },
+          {
+            fps: 10,
+            qrbox: function(width, height) {
+              const size = Math.min(width, height, 250);
+              return { width: size, height: size };
+            }
+          },
+          async function(tekst) {
+            if (obradjuje) return;
+
+            const kod = izdvojiKod(tekst);
+
+            if (!kod) {
+              poruka.textContent =
+                "QR kod nije prepoznat.";
+              return;
+            }
+
+            obradjuje = true;
+
+            try {
+              await skener.stop();
+              skener.clear();
+            } catch (e) {}
+
+            skener = null;
+
+            document.getElementById("ocitaniKod")
+              .textContent = "Kod: " + kod;
+
+            document.getElementById("rezultat")
+              .style.display = "block";
+
+            poruka.textContent = "";
+          },
+          function() {}
+        );
+
+        poruka.textContent = "Kamera je spremna.";
+        gumb.style.display = "none";
+
+      } catch (greska) {
+        poruka.textContent =
+          "Greška kamere: " +
+          (greska?.message || String(greska));
+
+        try {
+          if (skener) await skener.clear();
+        } catch (e) {}
+
+        skener = null;
+        gumb.disabled = false;
+      }
+    }
+
+    function ponovnoSkeniraj() {
+      document.getElementById("rezultat")
+        .style.display = "none";
+
+      document.getElementById("pokreni")
+        .style.display = "block";
+
+      pokreniSkener();
+    }
+  </script>
+</body>
+</html>
+
